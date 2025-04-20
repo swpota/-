@@ -25,23 +25,53 @@ public class RegexToNFA {
 
     private State constructNFA(State start, String regex) {
         State currentState = start;
-        for (char c : regex.toCharArray()) {
+        State prevState = null;
+        char prevChar = '\0';
+
+        for (int i = 0; i < regex.length(); i++) {
+            char c = regex.charAt(i);
+
+            if (c == '*') {
+                if (prevState == null) {
+                    throw new IllegalArgumentException("Invalid regex: '*' cannot be the first character");
+                }
+                // Add a self-loop to the previous state's outgoing transitions
+                prevState.addTransition(prevChar, prevState);
+                // Add an epsilon transition to allow skipping the repeated character
+                prevState.addTransition('\0', currentState);
+                continue;
+            }
+
+            // Create new state and add transition
             State newState = new State(stateCount++);
             currentState.addTransition(c, newState);
-            currentState = newState;
-        }
-        return currentState;
-    }
 
-    public boolean match(String input) {
-        return matchHelper(startState, input, 0);
+            // Update previous state and character
+            prevState = currentState;
+            currentState = newState;
+            prevChar = c;
+        }
+
+        return currentState;
     }
 
     private boolean matchHelper(State currentState, String input, int index) {
         if (index == input.length()) {
             return currentState == acceptState;
         }
+
         char symbol = input.charAt(index);
+
+        // Check epsilon transitions
+        if (currentState.transitions.containsKey('\0')) {
+            for (State nextState : currentState.transitions.get('\0')) {
+                if (matchHelper(nextState, input, index)) {
+                    return true;
+                }
+            }
+        }
+
+        // Check transitions for the current symbol
         if (currentState.transitions.containsKey(symbol)) {
             for (State nextState : currentState.transitions.get(symbol)) {
                 if (matchHelper(nextState, input, index + 1)) {
@@ -49,10 +79,14 @@ public class RegexToNFA {
                 }
             }
         }
+
         return false;
     }
 
-    // 可视化NFA
+    public boolean match(String input) {
+        return matchHelper(startState, input, 0);
+    }
+
     public void visualize() {
         Set<State> visited = new HashSet<>();
         visualizeHelper(startState, visited);
@@ -69,14 +103,5 @@ public class RegexToNFA {
                 visualizeHelper(nextState, visited);
             }
         }
-    }
-
-    public static void main(String[] args) {
-        RegexToNFA nfa = new RegexToNFA("ab*c");
-        nfa.visualize();
-        System.out.println(nfa.match("abc")); // true
-        System.out.println(nfa.match("ac")); // true
-        System.out.println(nfa.match("abbbc")); // true
-        System.out.println(nfa.match("abb")); // false
     }
 }
